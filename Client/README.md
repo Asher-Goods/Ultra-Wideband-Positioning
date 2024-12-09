@@ -24,9 +24,6 @@ This Python script implements a system for receiving, processing, and visualizin
 5. **Background Visualization**
    - Static background rectangles act as spatial references for visualization on the map.
 
-6. **Polling Slider**
-   - Allows users to control and send updates on how frequently anchor devices check for tag updates.
-
 ---
 
 ### 📡 **How Data is Handled**
