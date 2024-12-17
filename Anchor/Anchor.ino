@@ -13,7 +13,7 @@
 #define MODE 1
 #define NETWORKID 5
 // change depending on which anchor you are programming
-#define ADDRESS 8
+#define ADDRESS 10
 #define CPIN "00000000000000000000000000000001"
 
 HardwareSerial uwbSerial(2);
@@ -31,7 +31,7 @@ const uint16_t port = 50000;
 String ANCHOR_SendMSG_cmd = "AT+ANCHOR_SEND=9,4,TEST\r\n";
 
 // Variables for timer
-unsigned long sendInterval = 100;
+unsigned long sendInterval = 500;
 unsigned long previousTime = 0;
 
 void setup() {
@@ -180,7 +180,7 @@ void sendATCommand(String command, String parameterName) {
   Serial.println(command);
 
   // Wait for response
-  delay(100);
+  delay(300);
   if (uwbSerial.available()) {
     String response = uwbSerial.readString();
     Serial.print("Response for ");

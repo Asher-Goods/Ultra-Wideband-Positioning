@@ -5,10 +5,12 @@ import tkinter as tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.patches as patches 
 import matplotlib.pyplot as plt
+import numpy as np
 
 # default anchor positions
-anchor_1_position = (0, 0)
-anchor_2_position = (723, 0)
+anchor_1_position = (0, 0, 90)
+anchor_2_position = (660, 0, 90)
+anchor_3_position = (250, 600, 90)
 
 # Server configuration
 UDP_IP = "0.0.0.0"  # Listen on all available interfaces
@@ -24,66 +26,66 @@ sock.bind((UDP_IP, UDP_PORT))
 print(f"Listening for UDP packets on {UDP_IP}:{UDP_PORT}...")
 
 # Variables to store the latest distances
-distance_7 = None
-distance_8 = None
+distance_1 = None
+distance_2 = None
+distance_3 = None
 latest_tag_position = None  # Variable to store the latest calculated tag position
 
 
-def calculate_tag_position(anchor1, anchor2, distance1, distance2):
-    """
-    Calculate the position of a tag given two anchor points and distances.
-    :param anchor1: Tuple (x, y) of the first anchor's position
-    :param anchor2: Tuple (x, y) of the second anchor's position
-    :param distance1: Distance from anchor1 to the tag
-    :param distance2: Distance from anchor2 to the tag
-    :return: Tuple (x, y) of the tag's position, or None if no solution exists
-    """
-    x1, y1 = anchor1
-    x2, y2 = anchor2
+def trilateration(anchor1, anchor2, anchor3, distance1, distance2, distance3):
+    A = 2*anchor2[0] - 2*anchor1[0]
+    B = 2*anchor2[1] - 2*anchor1[1]
+    C = distance1**2 - distance2**2 - anchor1[0]**2 + anchor2[0]**2 - anchor1[1]**2 + anchor2[1]**2
+    D = 2*anchor3[0] - 2*anchor2[0]
+    E = 2*anchor3[1] - 2*anchor2[1]
+    F = distance2**2 - distance3**2 - anchor2[0]**2 + anchor3[0]**2 - anchor2[1]**2 + anchor3[1]**2
+    x = (C*E - F*B) / (E*A - B*D)
+    y = (C*D - A*F) / (B*D - A*E)
+    z = anchor1[2]
+    return x,y,z
 
-    try:
-        # Calculate the x-coordinate
-        x = (x1**2 + y1**2 - x2**2 - y2**2 + distance2**2 - distance1**2) / (2 * (x1 - x2))
-
-        # Calculate the y-coordinate
-        y_term = math.sqrt(distance1**2 - (x - x1)**2)
-        y1_candidate = y1 + y_term
-        y2_candidate = y1 - y_term
-
-        # Choose the candidate that makes the most sense geometrically
-        mid_y = (y1_candidate + y2_candidate) / 2
-        y = y1_candidate if abs(y1_candidate - mid_y) < abs(y2_candidate - mid_y) else y2_candidate
-
-        return x, y
-    except ValueError:
-        # Handle invalid geometry calculations
-        return None
 
 
 def process_incoming_data(json_data, ui):
-    global distance_7, distance_8, latest_tag_position
+    global distance_1, distance_2, distance_3, latest_tag_position
 
     try:
+        # Ensure required keys exist
+        if not all(k in json_data for k in ("device_address", "distance")):
+            print("Invalid JSON format or missing keys.")
+            return
+        
         device_address = json_data.get("device_address")
         distance_str = json_data.get("distance")
-        # Remove 'cm' from the string and convert it to float
+
+        # Validate the distance format
+        if not isinstance(distance_str, str) or "cm" not in distance_str:
+            print(f"Invalid distance format: {distance_str}")
+            return
+        
+        # Process distance
         distance_value = float(distance_str.replace(" cm", "").strip())
 
         # Update respective distances
+        # Anchor 1 = Device address 7
         if device_address == "7":
-            distance_7 = distance_value
-            print(f"Anchor 7 distance updated to: {distance_7} cm")
+            distance_1 = distance_value
+            print(f"Anchor 1 distance updated to: {distance_1} cm")
+        # Anchor 2 = Device address 8
         elif device_address == "8":
-            distance_8 = distance_value
-            print(f"Anchor 8 distance updated to: {distance_8} cm")
+            distance_2 = distance_value
+            print(f"Anchor 2 distance updated to: {distance_2} cm")
+        # Anchor 3 = Device address 10
+        elif device_address == "10":
+            distance_3 = distance_value
+            print(f"Anchor 3 distance updated to: {distance_3} cm")
 
         # Attempt to calculate tag position if both distances are available
-        if distance_7 is not None and distance_8 is not None:
+        if distance_1 is not None and distance_2 is not None and distance_3 is not None:
             # Define anchor positions (you can adjust these coordinates)
 
-
-            tag_position = calculate_tag_position(
-                ui.anchor_1_position, ui.anchor_2_position, distance_7, distance_8
+            tag_position = trilateration(
+                ui.anchor_1_position, ui.anchor_2_position, ui.anchor_3_position, distance_1, distance_2, distance_3
             )
 
             if tag_position:
@@ -106,6 +108,7 @@ class TagPositionUI:
         # Default anchor positions
         self.anchor_1_position = list(anchor_1_position)  # Use a mutable list
         self.anchor_2_position = list(anchor_2_position)
+        self.anchor_3_position = list(anchor_3_position)
 
         # Set up matplotlib figure and canvas
         self.fig, self.ax = plt.subplots()
@@ -113,8 +116,8 @@ class TagPositionUI:
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=1)
 
         # Set up axes limits
-        self.ax.set_xlim(-800, 800)
-        self.ax.set_ylim(-500, 2000)
+        self.ax.set_xlim(-300, 800)
+        self.ax.set_ylim(-300, 1400)
         self.ax.set_xlabel("X Coordinate")
         self.ax.set_ylabel("Y Coordinate")
         self.ax.grid()
@@ -150,6 +153,9 @@ class TagPositionUI:
         self.anchor_1_y_entry = tk.Entry(input_frame, width=10)
         self.anchor_1_y_entry.insert(0, str(self.anchor_1_position[1]))
         self.anchor_1_y_entry.grid(row=0, column=2, padx=5, pady=5)
+        self.anchor_1_z_entry = tk.Entry(input_frame, width=10)
+        self.anchor_1_z_entry.insert(0, str(self.anchor_1_position[2]))
+        self.anchor_1_z_entry.grid(row=0, column=3, padx=5, pady=5)
 
         # Anchor 2 inputs
         tk.Label(input_frame, text="Anchor 2 (x, y):").grid(row=1, column=0, padx=5, pady=5)
@@ -159,10 +165,25 @@ class TagPositionUI:
         self.anchor_2_y_entry = tk.Entry(input_frame, width=10)
         self.anchor_2_y_entry.insert(0, str(self.anchor_2_position[1]))
         self.anchor_2_y_entry.grid(row=1, column=2, padx=5, pady=5)
+        self.anchor_2_z_entry = tk.Entry(input_frame, width=10)
+        self.anchor_2_z_entry.insert(0, str(self.anchor_2_position[2]))
+        self.anchor_2_z_entry.grid(row=1, column=3, padx=5, pady=5)
+
+        # Anchor 3 inputs
+        tk.Label(input_frame, text="Anchor 3 (x, y):").grid(row=2, column=0, padx=5, pady=5)
+        self.anchor_3_x_entry = tk.Entry(input_frame, width=10)
+        self.anchor_3_x_entry.insert(0, str(self.anchor_3_position[0]))
+        self.anchor_3_x_entry.grid(row=2, column=1, padx=5, pady=5)
+        self.anchor_3_y_entry = tk.Entry(input_frame, width=10)
+        self.anchor_3_y_entry.insert(0, str(self.anchor_3_position[1]))
+        self.anchor_3_y_entry.grid(row=2, column=2, padx=5, pady=5)
+        self.anchor_3_z_entry = tk.Entry(input_frame, width=10)
+        self.anchor_3_z_entry.insert(0, str(self.anchor_3_position[2]))
+        self.anchor_3_z_entry.grid(row=2, column=3, padx=5, pady=5)
 
         # Update button
         tk.Button(input_frame, text="Update Anchors", command=self.update_anchor_positions).grid(
-            row=2, column=0, columnspan=3, pady=10
+            row=3, column=0, columnspan=3, pady=10
         )
 
     def update_anchor_positions(self):
@@ -174,22 +195,29 @@ class TagPositionUI:
             self.anchor_1_position = [
                 float(self.anchor_1_x_entry.get()),
                 float(self.anchor_1_y_entry.get()),
+                float(self.anchor_1_z_entry.get()),
             ]
             self.anchor_2_position = [
                 float(self.anchor_2_x_entry.get()),
                 float(self.anchor_2_y_entry.get()),
+                float(self.anchor_2_z_entry.get()),
+            ]
+            self.anchor_3_position = [
+                float(self.anchor_3_x_entry.get()),
+                float(self.anchor_3_y_entry.get()),
+                float(self.anchor_3_z_entry.get()),
             ]
 
             # Redraw the background and anchors
             self.ax.clear()
-            self.ax.set_xlim(-800, 800)
-            self.ax.set_ylim(-500, 2000)
+            self.ax.set_xlim(-300, 800)
+            self.ax.set_ylim(-300, 1400)
             self.ax.set_xlabel("X Coordinate")
             self.ax.set_ylabel("Y Coordinate")
             self.ax.grid()
             self.draw_background_squares()
 
-            print(f"Anchor positions updated to: {self.anchor_1_position}, {self.anchor_2_position}")
+            print(f"Anchor positions updated to: {self.anchor_1_position}, {self.anchor_2_position}, {self.anchor_3_position}")
 
             # Redraw tag position if available
             if latest_tag_position:
@@ -226,6 +254,14 @@ class TagPositionUI:
         self.ax.annotate(
             "Anchor 2",
             (self.anchor_2_position[0], self.anchor_2_position[1]),
+            textcoords="offset points",
+            xytext=(5, -15),
+            ha="center",
+        )
+        self.ax.plot(self.anchor_3_position[0], self.anchor_3_position[1], 'rs', markersize=10)
+        self.ax.annotate(
+            "Anchor 3",
+            (self.anchor_3_position[0], self.anchor_3_position[1]),
             textcoords="offset points",
             xytext=(5, -15),
             ha="center",
@@ -271,11 +307,11 @@ class TagPositionUI:
             self.current_annotation = None
 
         # Plot new red dot
-        self.current_tag_point = self.ax.plot(position[0], -position[1], 'ro')[0]
+        self.current_tag_point = self.ax.plot(position[0], position[1], 'ro')[0]
         # Add new annotation
         self.current_annotation = self.ax.annotate(
             f"Tag ({position[0]:.2f}, {position[1]:.2f})",
-            (position[0], -position[1]),
+            (position[0], position[1]),
             textcoords="offset points",
             xytext=(5, 5),
             ha="center",
@@ -286,8 +322,8 @@ class TagPositionUI:
         Periodically called to check for updates in the latest tag position and redraw the dynamic plot.
         """
         # Avoid clearing the permanent background - only draw dynamic elements
-        self.ax.set_xlim(-800, 800)
-        self.ax.set_ylim(-500, 2000)
+        self.ax.set_xlim(-300, 800)
+        self.ax.set_ylim(-300, 1400)
 
         # Redraw the tag position if available
         if latest_tag_position:
