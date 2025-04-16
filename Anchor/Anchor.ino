@@ -1,37 +1,37 @@
 // Include Libraries
 #include <Wire.h>
 #include <WiFi.h>              // For Wi-Fi connection
-#include <WiFiUDP.h>           // For UDP communication
+// #include <WiFiUDp.h>           // For UDP communication
 #include <ArduinoJson.h>       // For JSON serialization
 
 // Constants
 #define UWB_BAUD 115200
-#define RXD2 16
+#define RXD2 18 // 17 for the black //18 for the green
 #define TXD2 17
-#define RESET_PIN 4 // Define GPIO pin for Reset
+#define RESET_PIN 16 // Define GPIO pin for Reset
 
 #define MODE 1
 #define NETWORKID 5
 // change depending on which anchor you are programming
-#define ADDRESS 10
+#define ADDRESS 11
 #define CPIN "00000000000000000000000000000001"
 
 HardwareSerial uwbSerial(2);
 
 // Wi-Fi credentials
-const char *ssid = "Asher-PC";       // Replace with your Wi-Fi SSID
-const char *password = "location"; // Replace with your Wi-Fi password
+const char *ssid = "dlink-57B4";       // Replace with your Wi-Fi SSID
+const char *password = "hfpay39373"; // Replace with your Wi-Fi password
 
 // UDP configuration
 WiFiUDP udp;
-const char *host = "192.168.137.1"; // Replace with your server's IP
+const char *host = "192.168.0.185"; // Replace with your server's IP
 const uint16_t port = 50000;
 
 // ANCHOR send command
 String ANCHOR_SendMSG_cmd = "AT+ANCHOR_SEND=9,4,TEST\r\n";
 
 // Variables for timer
-unsigned long sendInterval = 500;
+unsigned long sendInterval = 1000;
 unsigned long previousTime = 0;
 
 void setup() {
@@ -180,7 +180,7 @@ void sendATCommand(String command, String parameterName) {
   Serial.println(command);
 
   // Wait for response
-  delay(300);
+  delay(250);
   if (uwbSerial.available()) {
     String response = uwbSerial.readString();
     Serial.print("Response for ");
